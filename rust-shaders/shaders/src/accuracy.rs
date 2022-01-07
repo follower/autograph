@@ -5,6 +5,7 @@ use crate::{
     autobind,
 };
 use spirv_std::glam::UVec3;
+use crunchy::unroll;
 
 #[repr(C)]
 pub struct AccuracyPushConsts {
@@ -24,21 +25,30 @@ fn accuracy<T>(
     let local_id = local_id.x as usize;
     let global_id = group_id * 256 + local_id;
     let n = push_consts.n as usize;
-    y_group[local_id] = if global_id < n {
-        if x.load(global_id) == t.load(global_id) {
-            1
-        } else {
-            0
-        }
+    let (x, t) = if global_id < n {
+        (x.load(global_id), t.load(global_id))
+    } else {
+        (0, 1)
+    };
+    y_group[local_id] = if x == t {
+        1
     } else {
         0
     };
     group_barrier();
+    if local_id < 16 {
+        let mut acc = 0;
+        unroll! { for i in 0 .. 16 {
+            acc += y_group[i * 16 + local_id];
+        }}
+        y_group[local_id] = acc;
+    }
+    group_barrier();
     if local_id == 0 {
         let mut acc = 0;
-        for i in 0 .. 256 {
+        unroll! { for i in 0 .. 16 {
             acc += y_group[i];
-        }
+        }}
         y[group_id] = acc;
     }
 }

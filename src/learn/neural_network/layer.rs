@@ -904,7 +904,7 @@ mod tests {
         scalar::{Float, Scalar},
         tensor::{Tensor, TensorView},
     };
-    use half::bf16;
+    //use half::bf16;
     use ndarray::{Array, ArrayD, ArrayViewD};
     use std::convert::TryFrom;
 

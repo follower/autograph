@@ -41,7 +41,7 @@ impl<S: Data<Elem = u32>, D: Dimension> TensorBase<S, D> {
     }
 }
 
-#[cfg(all(test, feature = "device_tests", feature = "learn"))]
+#[cfg(all(test, feature = "device_tests"))]
 mod tests {
     use super::*;
 

@@ -229,8 +229,8 @@ impl<T: Scalar, S: Data<Elem = T>, D: Dimension> TensorBase<S, D> {
 mod tests {
     use super::*;
     use crate::device::Device;
-    use approx::assert_relative_eq;
-    use half::bf16;
+    //use approx::assert_relative_eq;
+    //use half::bf16;
     use ndarray::{Array, ArrayView, IntoDimension};
     use num_traits::Bounded;
     use std::convert::TryFrom;
