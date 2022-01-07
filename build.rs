@@ -1,7 +1,6 @@
+use anyhow::{anyhow, Result};
 use std::{collections::HashMap, env, fs, path::PathBuf};
 use walkdir::WalkDir;
-
-type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 
 #[path = "src/device/shader.rs"]
 #[allow(unused)]
@@ -27,7 +26,9 @@ fn generate_modules() -> Result<()> {
             .unwrap()
             .strip_suffix(".spv")
             .unwrap();
-        let module = Module::from_spirv(fs::read(spirv_path)?)?.with_name(name);
+        let module = Module::from_spirv(fs::read(spirv_path)?)
+            .map_err(|e| anyhow!("{}: {}", name, e))?
+            .with_name(name);
         glsl_modules.insert(name.to_string(), module);
     }
     let glsl_modules_path = out_dir
@@ -55,7 +56,9 @@ fn generate_modules() -> Result<()> {
             .unwrap()
             .strip_suffix(".spv")
             .unwrap();
-        let module = Module::from_spirv(fs::read(spirv_path)?)?.with_name(name);
+        let module = Module::from_spirv(fs::read(spirv_path)?)
+            .map_err(|e| anyhow!("{}: {}", name, e))?
+            .with_name(name);
         fs::write(module_path, bincode::serialize(&module)?)?;
     }
     Ok(())

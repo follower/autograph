@@ -940,11 +940,11 @@ mod tests {
         Ok(())
     }
 
-    #[cfg_attr(windows, ignore)]
+    /*
     #[tokio::test]
     async fn relu_bf16() -> Result<()> {
         relu::<bf16>().await
-    }
+    }*/
 
     #[tokio::test]
     async fn relu_f32() -> Result<()> {
@@ -1003,11 +1003,11 @@ mod tests {
         Ok(())
     }
 
-    #[cfg_attr(windows, ignore)]
+    /*
     #[tokio::test]
     async fn relu_backward_bf16() -> Result<()> {
         relu_backward::<bf16>().await
-    }
+    }*/
 
     #[tokio::test]
     async fn relu_backward_f32() -> Result<()> {
@@ -1272,7 +1272,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg_attr(not(any(target_os = "ios", target_os = "macos")), ignore)]
+    /*
     #[tokio::test]
     async fn max_pool_2d_backward_atomic_f32() -> Result<()> {
         pool_backward::<f32, _>(
@@ -1286,7 +1286,7 @@ mod tests {
         )
         .await?;
         Ok(())
-    }
+    }*/
 
     #[tokio::test]
     async fn mean_pool_2d_backward_f32() -> Result<()> {
@@ -1308,7 +1308,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg_attr(not(any(target_os = "ios", target_os = "macos")), ignore)]
+    /*
     #[tokio::test]
     async fn mean_pool_2d_backward_atomic_f32() -> Result<()> {
         pool_backward::<f32, _>(
@@ -1322,5 +1322,5 @@ mod tests {
         )
         .await?;
         Ok(())
-    }
+    }*/
 }

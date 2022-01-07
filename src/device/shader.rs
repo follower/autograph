@@ -1,23 +1,21 @@
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, bail};
+use fxhash::FxHashMap;
 use hibitset::BitSet;
+use naga::Module as NagaModule;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use rspirv::{
     binary::{Disassemble, Parser},
-    dr::{Loader, Operand},
-    spirv::{Decoration, ExecutionMode, ExecutionModel, Op, StorageClass, Word},
-    sr::Constant,
+    dr::Loader,
 };
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use std::{
-    alloc::Layout,
     borrow::Cow,
-    collections::{HashMap, HashSet},
     fmt::{self, Debug},
 };
 type Result<T, E = anyhow::Error> = std::result::Result<T, E>;
 
-pub(super) const PUSH_CONSTANT_SIZE: usize = 256;
+//pub(super) const PUSH_CONSTANT_SIZE: usize = 256;
 pub(super) const SPECIALIZATION_SIZE: usize = 32;
 
 static MODULE_IDS: Lazy<Mutex<BitSet>> = Lazy::new(Mutex::default);
@@ -137,12 +135,13 @@ impl Module {
         Ok(output)
     }
 
+    /*
     #[cfg(test)]
     pub(crate) fn to_metal(&self) -> Result<Cow<str>> {
         let mut options = spirv_cross::msl::CompilerOptions::default();
         options.version = spirv_cross::msl::Version::V1_2;
         self.cross_compile::<spirv_cross::msl::Target>(options)
-    }
+    }*/
 
     #[cfg(test)]
     pub(crate) fn to_hlsl(&self) -> Result<Cow<str>> {
@@ -150,6 +149,39 @@ impl Module {
         options.shader_model = spirv_cross::hlsl::ShaderModel::V5_1;
         self.cross_compile::<spirv_cross::hlsl::Target>(options)
     }
+
+    #[cfg(test)]
+    pub(crate) fn to_metal(&self) -> Result<String> {
+        use naga::back::msl::{Options, PipelineOptions, Writer};
+        let module = spirv_to_naga(&self.spirv)?;
+        let info = validate_naga(&module)?;
+        let mut writer = Writer::new(String::new());
+        writer.write(
+            &module,
+            &info,
+            &Options::default(),
+            &PipelineOptions::default(),
+        )?;
+        let metal = writer.finish();
+        Ok(metal)
+    }
+
+    /* TODO: PushConstants not implemented in naga::back::hlsl?
+    #[cfg(test)]
+    pub(crate) fn to_hlsl(&self) -> Result<String> {
+        use naga::{back::hlsl::{Writer, Options}};
+        let module = spirv_to_naga(&self.spirv)?;
+        let options = Options::default();
+        let info = validate_naga(&module)?;
+        let mut hlsl = String::new();
+        let mut writer = Writer::new(&mut hlsl, &options);
+        let translation_info = writer.write(&module, &info)?;
+        for (entry, name) in self.descriptor.entries.keys().zip(translation_info.entry_point_names) {
+            assert_eq!(entry.as_str(), name?.as_str());
+        }
+        Ok(hlsl)
+    }
+    */
 }
 
 impl Debug for Module {
@@ -168,14 +200,31 @@ impl Drop for Module {
     }
 }
 
+fn validate_naga(
+    module: &NagaModule,
+) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    use naga::valid::{Capabilities, ValidationFlags, Validator};
+    Validator::new(ValidationFlags::all(), Capabilities::PUSH_CONSTANT).validate(module)
+}
+
+fn spirv_to_naga(spirv: &[u8]) -> Result<NagaModule> {
+    Ok(naga::front::spv::parse_u8_slice(
+        spirv,
+        &Default::default(),
+    )?)
+}
+
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub(super) struct ModuleDescriptor {
-    pub(super) entries: HashMap<String, EntryDescriptor>,
+    pub(super) entries: FxHashMap<String, EntryDescriptor>,
 }
 
 impl ModuleDescriptor {
     fn parse(spirv: &[u8]) -> Result<Self> {
-        parse_spirv(spirv)
+        Self::parse_naga(&spirv_to_naga(spirv)?)
+    }
+    fn parse_naga(naga_module: &NagaModule) -> Result<Self> {
+        parse_naga(naga_module)
     }
 }
 
@@ -222,7 +271,7 @@ impl SpecType {
         }
     }
 }
-
+/*
 #[derive(Clone, Debug)]
 struct EntryPoint {
     name: String,
@@ -234,558 +283,90 @@ struct BufferBinding {
     descriptor_set: u32,
     binding: u32,
     mutable: bool,
-}
+}*/
 
-fn parse_spirv(spirv: &[u8]) -> Result<ModuleDescriptor> {
-    let mut loader = Loader::new();
-    Parser::new(spirv, &mut loader)
-        .parse()
-        .map_err(|e| anyhow!("{:?}", e))?;
-    let module = loader.module();
+fn parse_naga(module: &NagaModule) -> Result<ModuleDescriptor> {
+    use naga::{valid::GlobalUse, ShaderStage, StorageClass, TypeInner};
 
-    let mut entry_points = HashMap::<Word, EntryPoint>::new();
+    let module_info = validate_naga(module)?;
+    let mut entries =
+        FxHashMap::with_capacity_and_hasher(module.entry_points.len(), Default::default());
 
-    for (i, inst) in module.entry_points.iter().enumerate() {
-        if inst.class.opcode == Op::EntryPoint {
-            match inst.operands.get(0) {
-                Some(Operand::ExecutionModel(ExecutionModel::GLCompute)) => (),
-                _ => continue,
-            };
-            let fn_id = match inst.operands.get(1) {
-                Some(&Operand::IdRef(fn_id)) => fn_id,
-                _ => bail!(
-                    "entry_points[{}] operands[1] invalid entry id:\n{:#?}",
-                    i,
-                    &inst
-                ),
-            };
-            let name = match inst.operands.get(2) {
-                Some(Operand::LiteralString(name)) => name.to_string(),
-                _ => bail!(
-                    "entry_points[{}] operands[1] invalid entry name:\n{:#?}",
-                    i,
-                    &inst
-                ),
-            };
-            entry_points.insert(
-                fn_id,
-                EntryPoint {
-                    name,
-                    local_size: [1, 1, 1],
-                },
+    for (i, entry_point) in module.entry_points.iter().enumerate() {
+        let mut storage_buffers = Vec::new();
+        let mut push_constant_size = 0;
+        let entry = entry_point.name.as_str();
+        let entry_info = module_info.get_entry_point(i);
+
+        if entry_point.stage != ShaderStage::Compute {
+            bail!(
+                "{entry:?}: Only compute shaders supported! Found {stage:?}!",
+                entry = entry_point.name.as_str(),
+                stage = entry_point.stage
             );
         }
-    }
 
-    for (i, inst) in module.execution_modes.iter().enumerate() {
-        if inst.class.opcode == Op::ExecutionMode {
-            match inst.operands.get(1) {
-                Some(Operand::ExecutionMode(ExecutionMode::LocalSize)) => (),
-                _ => continue,
-            }
-            let fn_id = match inst.operands.get(0) {
-                Some(&Operand::IdRef(fn_id)) => fn_id,
-                _ => bail!(
-                    "execution_modes[{}] operands[0] invalid entry id:\n{:#?}",
-                    i,
-                    &inst
-                ),
-            };
-            let local_size = match inst.operands.get(2..=4) {
-                Some(
-                    &[Operand::LiteralInt32(x), Operand::LiteralInt32(y), Operand::LiteralInt32(z)],
-                ) => [x, y, z],
-                _ => bail!(
-                    "execution_modes[{}] operands[2] invalid local_size:\n{:#?}",
-                    i,
-                    &inst
-                ),
-            };
-            if let Some(entry_point) = entry_points.get_mut(&fn_id) {
-                entry_point.local_size = local_size;
-            }
-        }
-    }
-
-    let mut descriptor_sets = HashMap::<Word, u32>::new();
-    let mut bindings = HashMap::<Word, u32>::new();
-    let mut nonwritable = HashSet::<Word>::new();
-    let mut field_offsets = HashMap::<(Word, u32), u32>::new();
-    let mut spec_ids = HashMap::<Word, Word>::new();
-
-    for (i, inst) in module.annotations.iter().enumerate() {
-        match inst.class.opcode {
-            Op::Decorate => {
-                let id = match inst.operands.get(0) {
-                    Some(&Operand::IdRef(id)) => Ok(id),
-                    _ => Err(anyhow!(
-                        "annotations[{}] operands[0] invalid id:\n{:#?}",
-                        i,
-                        &inst
-                    )),
-                };
-                let x = match inst.operands.get(2) {
-                    Some(&Operand::LiteralInt32(x)) => Ok(x),
-                    _ => Err(anyhow!(
-                        "annotations[{}] operands[2] invalid set / binding:\n{:#?}",
-                        i,
-                        &inst
-                    )),
-                };
-                if let Some(&Operand::Decoration(decoration)) = inst.operands.get(1) {
-                    match decoration {
-                        Decoration::DescriptorSet => {
-                            descriptor_sets.insert(id?, x?);
+        for (v, var) in module.global_variables.iter() {
+            let global_use = entry_info[v];
+            if global_use.contains(GlobalUse::READ) || global_use.contains(GlobalUse::WRITE) {
+                match &var.class {
+                    StorageClass::Storage { .. } => {
+                        if let Some(binding) = &var.binding {
+                            let binding = binding.binding as usize;
+                            while storage_buffers.len() <= binding {
+                                storage_buffers.push(None);
+                            }
+                            if storage_buffers[binding].is_some() {
+                                bail!("{entry:?}: bindings must be unique!", entry = entry);
+                            }
+                            let mutable = global_use.contains(GlobalUse::WRITE);
+                            storage_buffers[binding].replace(mutable);
                         }
-                        Decoration::Binding => {
-                            bindings.insert(id?, x?);
-                        }
-                        Decoration::SpecId => {
-                            spec_ids.insert(id?, x?);
-                        }
-                        _ => (),
                     }
-                }
-            }
-            Op::MemberDecorate => {
-                let id = match inst.operands.get(0) {
-                    Some(&Operand::IdRef(id)) => Ok(id),
-                    _ => Err(anyhow!(
-                        "annotations[{}] operands[0] invalid id:\n{:#?}",
-                        i,
-                        &inst
-                    )),
-                };
-                match inst.operands.get(2) {
-                    Some(&Operand::Decoration(Decoration::Offset)) => {
-                        let index = match inst.operands.get(1) {
-                            Some(&Operand::LiteralInt32(index)) => index,
-                            _ => bail!(
-                                "annotations[{}] operands[1] invalid field offset index:\n{:#?}",
-                                i,
-                                &inst
-                            ),
-                        };
-                        let offset = match inst.operands.get(3) {
-                            Some(&Operand::LiteralInt32(offset)) => offset,
-                            _ => bail!(
-                                "annotations[{}] operands[3] invalid field offset:\n{:#?}",
-                                i,
-                                &inst
-                            ),
-                        };
-                        field_offsets.insert((id?, index), offset);
-                    }
-                    Some(&Operand::Decoration(Decoration::NonWritable)) => {
-                        nonwritable.insert(id?);
+                    StorageClass::PushConstant => {
+                        let ty = &module.types[var.ty];
+                        if let TypeInner::Struct { span, .. } = ty.inner {
+                            if push_constant_size != 0 {
+                                bail!(
+                                    "{entry:?}: cannot have more than 1 push constant block!",
+                                    entry = entry
+                                );
+                            }
+                            if span > 256 {
+                                bail!("{entry:?}: push constant size must be less than 256 bytes! Found {span}!", entry=entry, span=span);
+                            }
+                            push_constant_size = span as u8;
+                        }
                     }
                     _ => (),
                 }
             }
-            _ => (),
         }
-    }
 
-    let mut layouts = HashMap::<Word, Layout>::new();
-    let mut pointers = HashMap::<Word, (StorageClass, Word)>::new();
-    let mut variables = HashMap::<Word, (StorageClass, Word)>::new();
-    let mut constants = HashMap::<Word, Constant>::new();
-    let mut spec_constants = HashMap::<Word, SpecConstant>::new();
-
-    for (i, inst) in module.types_global_values.iter().enumerate() {
-        let result_id = inst.result_id.ok_or_else(|| {
-            anyhow!(
-                "types_global_values[{}].result_id found None:\n{:#?}",
-                i,
-                &inst
-            )
-        })?;
-        match inst.class.opcode {
-            Op::TypeBool => {
-                let layout = Layout::new::<bool>();
-                layouts.insert(result_id, layout);
-            }
-            Op::TypeInt | Op::TypeFloat => {
-                let layout = match inst.operands.get(0) {
-                    Some(&Operand::LiteralInt32(bits)) => match bits {
-                        8 => Layout::new::<u8>(),
-                        16 => Layout::new::<u16>(),
-                        32 => Layout::new::<u32>(),
-                        64 => Layout::new::<u64>(),
-                        _ => bail!("types_global_values[{}] operands[0] unsupported Int / Float width:\n{:#?}\n\nSupported widths are 8, 16, 32, 64.", i, &inst),
-                    },
-                    _ => bail!("types_global_values[{}] operands[0] invalid Int / Float width:\n{:#?}", i, &inst),
-                };
-                layouts.insert(result_id, layout);
-            }
-            Op::TypeStruct => {
-                let mut layout = Some(Layout::from_size_align(0, 1).unwrap());
-                for (o, operand) in inst.operands.iter().enumerate() {
-                    if let Operand::IdRef(field) = *operand {
-                        if let Some(&field_layout) = layouts.get(&field) {
-                            let (next_layout, offset) =
-                                layout.unwrap().extend(field_layout).map_err(|_| {
-                                    anyhow!(
-                                        "types_global_values[{}] unable to get layout for struct:\n{:#?}\nlayout = {:?}\nfield_layout[{}] = {:?}",
-                                        i, &inst, &layout, field, &field_layout
-                                    )
-                                })?;
-                            ensure!(
-                                field_offsets.get(&(result_id, o as u32)) == Some(&(offset as u32)),
-                                "types_global_values[{}] operands[{}] field offsets do not match:\n{:#?}", i, o, &inst
-                            );
-                            layout.replace(next_layout);
-                        } else {
-                            layout.take();
-                            break;
-                        }
-                    } else {
-                        bail!(
-                            "types_global_values[{}] operands[{}] invalid struct field:\n{:#?}",
-                            i,
-                            o,
-                            &inst
-                        );
-                    }
-                }
-                if let Some(layout) = layout {
-                    layouts.insert(result_id, layout);
-                }
-            }
-            Op::TypeVector | Op::TypeArray => {
-                let elem = match inst.operands.get(0) {
-                    Some(&Operand::IdRef(elem)) => elem,
-                    _ => bail!(
-                        "types_global_values[{}] operands[0] invalid vector elem:\n{:#?}",
-                        i,
-                        &inst
-                    ),
-                };
-                let n = match inst.operands.get(1) {
-                    Some(&Operand::LiteralInt32(n)) => n,
-                    Some(Operand::IdRef(id)) => {
-                        let constant = constants
-                            .get(id)
-                            .ok_or_else(|| anyhow!("(internal error) constant not found!"))?;
-                        match constant {
-                            Constant::UInt(n) => *n,
-                            _ => bail!(
-                                "types_global_values[{}] operands[0] invalid array len:\n{:#?}",
-                                i,
-                                &inst
-                            ),
-                        }
-                    }
-                    _ => bail!(
-                        "types_global_values[{}] operands[0] invalid len:\n{:#?}",
-                        i,
-                        &inst
-                    ),
-                };
-                if let Some(&elem_layout) = layouts.get(&elem) {
-                    let mut layout = Layout::from_size_align(0, 1).unwrap();
-                    for _ in 0..n {
-                        let (next_layout, _) = layout.extend(elem_layout).map_err(|_| {
-                            anyhow!(
-                                "types_global_values[{}] unable to get layout for vector:\n{:#?}\nlayout = {:?}\nelem_layout = {:?}",
-                                i, &inst, &layout, &elem_layout
-                            )
-                        })?;
-                        layout = next_layout;
-                    }
-                    layouts.insert(result_id, layout);
-                }
-            }
-            Op::TypePointer => {
-                let storage_class = match inst.operands.get(0) {
-                    Some(&Operand::StorageClass(storage_class)) => {
-                        if !(storage_class == StorageClass::StorageBuffer
-                            || storage_class == StorageClass::Uniform
-                            || storage_class == StorageClass::PushConstant)
-                        {
-                            continue;
-                        } else {
-                            storage_class
-                        }
-                    }
-                    _ => continue,
-                };
-                let pointee = match inst.operands.get(1) {
-                    Some(&Operand::IdRef(pointee)) => pointee,
-                    _ => bail!(
-                        "types_global_values[{}] operands[1] invalid pointee:\n{:#?}",
-                        i,
-                        &inst
-                    ),
-                };
-                pointers.insert(result_id, (storage_class, pointee));
-            }
-            Op::Variable => {
-                let storage_class = match inst.operands.get(0) {
-                    Some(&Operand::StorageClass(storage_class)) => {
-                        if !(storage_class == StorageClass::StorageBuffer
-                            || storage_class == StorageClass::Uniform
-                            || storage_class == StorageClass::PushConstant)
-                        {
-                            continue;
-                        } else {
-                            storage_class
-                        }
-                    }
-                    _ => continue,
-                };
-                let result_type = inst.result_type.ok_or_else(|| {
-                    anyhow!(
-                        "types_global_values[{}].result_type found None:\n{:#?}",
-                        i,
-                        &inst
-                    )
-                })?;
-                variables.insert(result_id, (storage_class, result_type));
-            }
-            Op::Constant => {
-                let result_id = inst.result_id.ok_or_else(|| {
-                    anyhow!(
-                        "types_global_values[{}].result_id found None:\n{:#?}",
-                        i,
-                        &inst
-                    )
-                })?;
-                if let Some(constant) = match inst.operands.get(0) {
-                    Some(&Operand::LiteralInt32(x)) => Some(Constant::UInt(x)),
-                    Some(&Operand::LiteralFloat32(x)) => Some(Constant::Float(x)),
-                    _ => None,
-                } {
-                    constants.insert(result_id, constant);
-                }
-            }
-            Op::SpecConstant => {
-                let result_id = inst.result_id.ok_or_else(|| {
-                    anyhow!(
-                        "types_global_values[{}].result_id found None:\n{:#?}",
-                        i,
-                        &inst
-                    )
-                })?;
-                let spec_type = match inst.operands.get(0) {
-                    Some(&Operand::LiteralInt32(_)) => SpecType::U32,
-                    Some(&Operand::LiteralInt64(_)) => SpecType::U64,
-                    Some(&Operand::LiteralFloat32(_)) => SpecType::F32,
-                    Some(&Operand::LiteralFloat64(_)) => SpecType::F64,
-                    _ => {
-                        bail!(
-                            "types_global_values[{}] operands[0] Expected spec constant value, found:\n{:#?}",
-                            i,
-                            &inst
-                        );
-                    }
-                };
-                let spec_id = spec_ids.get(&result_id).ok_or_else(|| {
-                    anyhow!(
-                        "types_global_values[{}] spec_id not found for op {}:\n{:?}",
-                        i,
-                        result_id,
-                        &inst,
-                    )
-                })?;
-                spec_constants.insert(
-                    result_id,
-                    SpecConstant {
-                        id: *spec_id,
-                        spec_type,
-                    },
+        let mut buffers = Vec::with_capacity(storage_buffers.len());
+        for buffer in storage_buffers.iter() {
+            if let Some(mutable) = buffer {
+                buffers.push(*mutable);
+            } else {
+                bail!(
+                    "{entry:?}: bindings must be in order from 0 .. N! {buffers:?}",
+                    entry = entry,
+                    buffers = storage_buffers
                 );
             }
-            _ => (),
         }
-    }
-
-    let mut buffer_bindings = HashMap::<Word, BufferBinding>::new();
-    let mut push_constants = HashMap::<Word, u8>::new();
-
-    for (&variable, &(storage_class, pointer)) in variables.iter() {
-        let &(storage_class2, pointee) = pointers.get(&pointer).ok_or_else(|| {
-            anyhow!(
-                "(internal error) pointer not found {}:\npointers = {:?}",
-                pointer,
-                &pointers
-            )
-        })?;
-
-        ensure!(
-            storage_class == storage_class2,
-            "invalid spirv: variable {} storage classs {:?} does not match pointer {} storage class {:?}",
-            variable, storage_class, pointer, storage_class2
+        entries.insert(
+            entry.to_string(),
+            EntryDescriptor {
+                id: EntryId(i as u32),
+                local_size: entry_point.workgroup_size,
+                buffers,
+                push_constant_size,
+                spec_constants: Vec::new(),
+            },
         );
-        match storage_class {
-            StorageClass::StorageBuffer | StorageClass::Uniform => {
-                let &descriptor_set = descriptor_sets.get(&variable)
-                    .ok_or_else(|| {
-                    anyhow!(
-                        "(internal error) descriptor set not found for variable {}:\ndescriptor_sets = {:?}",
-                        variable, &descriptor_sets
-                    )
-                })?;
-                let &binding = bindings.get(&variable).ok_or_else(|| {
-                    anyhow!(
-                        "(internal error) binding not found for variable {}:\nbindings = {:?}",
-                        variable,
-                        &bindings
-                    )
-                })?;
-                buffer_bindings.insert(
-                    variable,
-                    BufferBinding {
-                        descriptor_set,
-                        binding,
-                        mutable: false,
-                    },
-                );
-            }
-            StorageClass::PushConstant => {
-                let layout = layouts.get(&pointee).ok_or_else(|| {
-                    anyhow!(
-                        "(internal error) layout not found for push constant:\npointee = {}\nlayouts = {:#?}",
-                        pointee, &layouts,
-                    )
-                })?;
-                let layout_size = layout.size();
-                let push_consts = if layout_size > PUSH_CONSTANT_SIZE {
-                    bail!("Push constants are limited to {} B!", PUSH_CONSTANT_SIZE);
-                } else {
-                    layout_size as u8
-                };
-                push_constants.insert(variable, push_consts);
-            }
-            _ => unreachable!(),
-        }
     }
-
-    let mut entry_id = 0;
-    let mut module_descriptor = ModuleDescriptor::default();
-
-    for (f, function) in module.functions.iter().enumerate() {
-        let fn_id = if let Some(def) = function.def.as_ref() {
-            def.result_id.ok_or_else(|| {
-                anyhow!(
-                    "functions[{}].def.result_id found None:\n{:#?}",
-                    f,
-                    &function
-                )
-            })?
-        } else {
-            continue;
-        };
-        if let Some(entry_point) = entry_points.get(&fn_id) {
-            let mut parameters = HashMap::<Word, bool>::new();
-            let mut pointers = HashMap::<Word, Word>::new();
-            let mut specialization = HashMap::<Word, SpecConstant>::new();
-            for (b, block) in function.blocks.iter().enumerate() {
-                for (i, inst) in block.instructions.iter().enumerate() {
-                    match inst.class.opcode {
-                        Op::AccessChain | Op::InBoundsAccessChain => {
-                            let result_id = inst.result_id.ok_or_else(|| {
-                                anyhow!(
-                                    "entry_point: {} functions[{}].blocks[{}].instructions[{}].result_id found None:\n{:#?}",
-                                    &entry_point.name,
-                                    f,
-                                    b,
-                                    i,
-                                    &function)
-                            })?;
-                            let variable = match inst.operands.get(0) {
-                                Some(&Operand::IdRef(variable)) => variable,
-                                _ => bail!("entry_point: {} functions[{}].blocks[{}].instructions[{}].operands[0] invalid variable:\n{:#?}", &entry_point.name, f, b, i, &function),
-                            };
-                            parameters.entry(variable).or_default();
-                            pointers.insert(result_id, variable);
-                        }
-                        Op::Store
-                        | Op::AtomicStore
-                        | Op::AtomicAnd
-                        | Op::AtomicOr
-                        | Op::AtomicXor
-                        | Op::AtomicIAdd
-                        | Op::AtomicISub
-                        | Op::AtomicCompareExchange
-                        | Op::AtomicCompareExchangeWeak => {
-                            let pointer = match inst.operands.get(0) {
-                                Some(&Operand::IdRef(variable)) => variable,
-                                _ => bail!("entry_point: {} functions[{}].blocks[{}].instructions[{}].operands[0] invalid pointer:\n{:#?}", &entry_point.name, f, b, i, &function),
-                            };
-                            if let Some(variable) = pointers.get(&pointer) {
-                                if let Some(mutable) = parameters.get_mut(variable) {
-                                    *mutable = true;
-                                }
-                            }
-                        }
-                        _ => (),
-                    }
-                    for operand in inst.operands.iter() {
-                        if let Operand::IdRef(result_id) = operand {
-                            if let Some(spec_constant) = spec_constants.get(result_id) {
-                                specialization.insert(*result_id, *spec_constant);
-                            }
-                        }
-                    }
-                }
-            }
-            let mut buffers = Vec::<BufferBinding>::new();
-            let mut push_constant_range = 0;
-            for (variable, mutable) in parameters.iter() {
-                if let Some(&buffer) = buffer_bindings.get(variable) {
-                    if buffer.descriptor_set != 0 {
-                        bail!(
-                            "entry_point: {} functions[{}] descriptor set must be 0\n",
-                            &entry_point.name,
-                            f,
-                        );
-                    }
-                    let mut buffer = buffer;
-                    buffer.mutable = *mutable;
-                    if buffer.mutable && nonwritable.contains(variable) {
-                        bail!(
-                            "entry_point: {} functions[{}] nonwritable buffer at binding {} is modified!\n",
-                            &entry_point.name,
-                            f,
-                            buffer.binding,
-                        );
-                    }
-                    buffers.push(buffer);
-                } else if let Some(&push_consts) = push_constants.get(variable) {
-                    if push_constant_range > 0 {
-                        bail!("entry_point: {} functions[{}] only 1 push constant block is allowed!\n", &entry_point.name, f);
-                    }
-                    push_constant_range = push_consts;
-                }
-            }
-            buffers.sort_by_key(|b| b.binding);
-            for (i, buffer) in buffers.iter().enumerate() {
-                if i != buffer.binding as usize {
-                    bail!("entry_point: {} functions[{}] buffer bindings must be in order from 0 .. N!\n", &entry_point.name, f);
-                }
-            }
-            let buffers = buffers.iter().map(|b| b.mutable).collect();
-            let mut spec_constants = specialization.values().copied().collect::<Vec<_>>();
-            spec_constants.sort_by_key(|c| c.id);
-            module_descriptor.entries.insert(
-                entry_point.name.clone(),
-                EntryDescriptor {
-                    id: EntryId({
-                        let id = entry_id;
-                        entry_id += 1;
-                        id
-                    }),
-                    local_size: entry_point.local_size,
-                    buffers,
-                    push_constant_size: push_constant_range,
-                    spec_constants,
-                },
-            );
-        }
-    }
-
-    Ok(module_descriptor)
+    Ok(ModuleDescriptor { entries })
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 use spirv_std::glam::UVec3;
 use crate::{
     autobind,
-    atomic::AtomicF32,
+    //atomic::AtomicF32,
     util::Load,
 };
 
@@ -354,7 +354,7 @@ pub fn max_pool_2d_backward_f32(
         push_consts,
     );
 }
-
+/*
 // TOOD: flatten to threads(256) and move atomic impl to type / trait / function abstraction
 #[autobind]
 #[spirv(compute(threads(256)))]
@@ -377,7 +377,7 @@ pub fn max_pool_2d_backward_atomic_f32(
         dy,
         push_consts,
     );
-}
+}*/
 
 
 #[repr(C)]
@@ -465,7 +465,7 @@ pub fn mean_pool_2d_backward_f32(
         push_consts,
     );
 }
-
+/*
 #[autobind]
 #[spirv(compute(threads(256)))]
 pub fn mean_pool_2d_backward_atomic_f32(
@@ -485,4 +485,4 @@ pub fn mean_pool_2d_backward_atomic_f32(
         dy,
         push_consts,
     );
-}
+}*/

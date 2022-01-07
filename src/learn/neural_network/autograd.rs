@@ -1312,10 +1312,10 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    /*#[tokio::test]
     async fn bias_backward_bf16() -> Result<()> {
         test_bias_backward::<bf16>().await
-    }
+    }*/
 
     #[tokio::test]
     async fn bias_backward_f32() -> Result<()> {

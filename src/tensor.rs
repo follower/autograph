@@ -1161,12 +1161,12 @@ mod tests {
         Ok(())
     }
 
-    #[cfg_attr(windows, ignore)]
+    /*
     #[cfg(feature = "device_tests")]
     #[tokio::test]
     async fn scaled_cast_u8_bf16() -> Result<()> {
         scaled_cast::<u8, bf16>().await
-    }
+    }*/
 
     #[cfg(feature = "device_tests")]
     #[tokio::test]
@@ -1186,12 +1186,12 @@ mod tests {
         scaled_cast::<u8, f32>().await
     }
 
-    #[cfg_attr(windows, ignore)]
+    /*
     #[cfg(feature = "device_tests")]
     #[tokio::test]
     async fn scaled_cast_u16_bf16() -> Result<()> {
         scaled_cast::<u16, bf16>().await
-    }
+    }*/
 
     #[cfg(feature = "device_tests")]
     #[tokio::test]
@@ -1211,12 +1211,12 @@ mod tests {
         scaled_cast::<u16, f32>().await
     }
 
-    #[cfg_attr(windows, ignore)]
+    /*
     #[cfg(feature = "device_tests")]
     #[tokio::test]
     async fn scaled_cast_bf16_bf16() -> Result<()> {
         scaled_cast::<bf16, bf16>().await
-    }
+    }*/
 
     #[cfg(feature = "device_tests")]
     #[tokio::test]
@@ -1236,12 +1236,12 @@ mod tests {
         scaled_cast::<bf16, f32>().await
     }
 
-    #[cfg_attr(windows, ignore)]
+    /*
     #[cfg(feature = "device_tests")]
     #[tokio::test]
     async fn scaled_cast_u32_bf16() -> Result<()> {
         scaled_cast::<u32, bf16>().await
-    }
+    }*/
 
     #[cfg(feature = "device_tests")]
     #[tokio::test]
@@ -1261,12 +1261,12 @@ mod tests {
         scaled_cast::<u32, f32>().await
     }
 
-    #[cfg_attr(windows, ignore)]
+    /*
     #[cfg(feature = "device_tests")]
     #[tokio::test]
     async fn scaled_cast_i32_bf16() -> Result<()> {
         scaled_cast::<i32, bf16>().await
-    }
+    }*/
 
     #[cfg(feature = "device_tests")]
     #[tokio::test]
@@ -1316,26 +1316,26 @@ mod tests {
         Ok(())
     }
 
-    #[cfg_attr(windows, ignore)]
+    /*
     #[cfg(feature = "device_tests")]
     #[tokio::test]
     async fn one_hot_u8_bf16() -> Result<()> {
         one_hot::<u8, bf16>().await
-    }
+    }*/
 
-    #[cfg_attr(windows, ignore)]
+    /*
     #[cfg(feature = "device_tests")]
     #[tokio::test]
     async fn one_hot_u16_bf16() -> Result<()> {
         one_hot::<u16, bf16>().await
-    }
+    }*/
 
-    #[cfg_attr(windows, ignore)]
+    /*
     #[cfg(feature = "device_tests")]
     #[tokio::test]
     async fn one_hot_u32_bf16() -> Result<()> {
         one_hot::<u32, bf16>().await
-    }
+    }*/
 
     #[cfg(feature = "device_tests")]
     #[tokio::test]

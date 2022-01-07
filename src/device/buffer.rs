@@ -1696,12 +1696,11 @@ mod tests {
             };
         }
 
-        #[cfg(not(any(target_os = "ios", target_os = "macos")))]
-        mod not_mac {
+        /*mod bf16_tests {
             use super::*;
 
             impl_scale_tests! { (u8, u16, bf16, u32, i32, f32) => (bf16) }
-        }
+        }*/
 
         impl_scale_tests! { (u8, u16, bf16, u32, i32, f32) => (u32, i32, f32) }
     }

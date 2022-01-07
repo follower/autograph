@@ -228,7 +228,7 @@ impl<T: Scalar, S: Data<Elem = T>, D: Dimension> TensorBase<S, D> {
 #[cfg(all(test, feature = "device_tests"))]
 mod tests {
     use super::*;
-    use crate::{device::Device, rust_shaders};
+    use crate::device::Device;
     use approx::assert_relative_eq;
     use half::bf16;
     use ndarray::{Array, ArrayView, IntoDimension};
@@ -299,7 +299,7 @@ mod tests {
         })
     }
 
-    fn tensor_sum_bf16<D: IntoDimension>(dim: D, axis: Axis) -> Result<()>
+    /*fn tensor_sum_bf16<D: IntoDimension>(dim: D, axis: Axis) -> Result<()>
     where
         D::Dim: RemoveAxis,
     {
@@ -316,7 +316,7 @@ mod tests {
             assert_relative_eq!(&y, &y_true, epsilon = 0.01, max_relative = 0.01);
             Ok(())
         })
-    }
+    }*/
 
     fn tensor_argmin<T: Scalar + From<u8> + PartialOrd + Bounded, D: IntoDimension>(
         dim: D,
@@ -338,7 +338,7 @@ mod tests {
         })
     }
 
-    fn tensor_argmin_bf16<D: IntoDimension>(dim: D, axis: Axis) -> Result<()>
+    /*fn tensor_argmin_bf16<D: IntoDimension>(dim: D, axis: Axis) -> Result<()>
     where
         D::Dim: RemoveAxis,
     {
@@ -355,7 +355,7 @@ mod tests {
             assert_eq!(&y.as_array(), &y_true.view());
             Ok(())
         })
-    }
+    }*/
 
     fn tensor_argmax<T: Scalar + From<u8> + PartialOrd + Bounded, D: IntoDimension>(
         dim: D,
@@ -377,7 +377,7 @@ mod tests {
         })
     }
 
-    fn tensor_argmax_bf16<D: IntoDimension>(dim: D, axis: Axis) -> Result<()>
+    /*fn tensor_argmax_bf16<D: IntoDimension>(dim: D, axis: Axis) -> Result<()>
     where
         D::Dim: RemoveAxis,
     {
@@ -394,9 +394,9 @@ mod tests {
             assert_eq!(&y.as_array(), &y_true.view());
             Ok(())
         })
-    }
+    }*/
 
-    #[test]
+    /*#[test]
     fn tensor_sum_bf16_11x12_axis0() -> Result<()> {
         tensor_sum_bf16([11, 12], Axis(0))
     }
@@ -404,7 +404,7 @@ mod tests {
     #[test]
     fn tensor_sum_bf16_22x23_axis1() -> Result<()> {
         tensor_sum_bf16([22, 23], Axis(1))
-    }
+    }*/
 
     #[test]
     fn tensor_sum_u32_11x12_axis0() -> Result<()> {
@@ -436,7 +436,7 @@ mod tests {
         tensor_sum::<f32, _>([22, 23], Axis(1))
     }
 
-    #[test]
+    /*#[test]
     fn tensor_argmin_bf16_11x12_axis0() -> Result<()> {
         tensor_argmin_bf16([11, 12], Axis(0))
     }
@@ -444,7 +444,7 @@ mod tests {
     #[test]
     fn tensor_argmin_bf16_22x23_axis1() -> Result<()> {
         tensor_argmin_bf16([22, 23], Axis(1))
-    }
+    }*/
 
     #[test]
     fn tensor_argmin_u32_11x12_axis0() -> Result<()> {
@@ -476,7 +476,7 @@ mod tests {
         tensor_argmin::<f32, _>([22, 23], Axis(1))
     }
 
-    #[test]
+    /*#[test]
     fn tensor_argmax_bf16_11x12_axis0() -> Result<()> {
         tensor_argmax_bf16([11, 12], Axis(0))
     }
@@ -484,7 +484,7 @@ mod tests {
     #[test]
     fn tensor_argmax_bf16_22x23_axis1() -> Result<()> {
         tensor_argmax_bf16([22, 23], Axis(1))
-    }
+    }*/
 
     #[test]
     fn tensor_argmax_u32_11x12_axis0() -> Result<()> {
@@ -516,6 +516,7 @@ mod tests {
         tensor_argmax::<f32, _>([22, 23], Axis(1))
     }
 
+    /*
     async fn atomic_add<T: Scalar + core::iter::Sum>(n: usize, entry: &str) -> Result<()> {
         let x_vec = (1..=n)
             .into_iter()
@@ -544,5 +545,5 @@ mod tests {
     async fn atomic_add_f32() -> Result<()> {
         atomic_add::<f32>(4, "atomic_add_f32").await?;
         Ok(())
-    }
+    }*/
 }

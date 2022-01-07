@@ -1,4 +1,4 @@
-use crate::{util::{Load, Store}, half::bf16x2, autobind};
+use crate::{util::{Load, Store}, /*half::bf16x2,*/ autobind};
 use spirv_std::glam::UVec3;
 
 #[repr(C)]
@@ -79,6 +79,6 @@ macro_rules! impl_relu {
 }
 
 impl_relu!{
-    relu_bf16 | relu_backward_bf16 <bf16x2>,
+    //relu_bf16 | relu_backward_bf16 <bf16x2>,
     relu_f32 | relu_backward_f32 <f32>,
 }

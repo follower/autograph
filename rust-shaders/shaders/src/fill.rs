@@ -61,7 +61,7 @@ macro_rules! impl_fill {
 
 impl_fill!{
     fill_u32<u32, FillPushConstsU32>,
-    //fill_u32x2<[u32; 2], FillPushConstsU32x2>,
+    // fill_u32x2<[u32; 2], FillPushConstsU32x2>,
 }
 
 #[autobind]

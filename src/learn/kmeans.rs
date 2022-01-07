@@ -552,10 +552,10 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    /*#[tokio::test]
     async fn compute_distances_bf16_m11_k5_n13() -> Result<()> {
         compute_distances::<bf16>(11, 5, 13).await
-    }
+    }*/
 
     #[tokio::test]
     async fn compute_distances_f32_m11_k5_n13() -> Result<()> {

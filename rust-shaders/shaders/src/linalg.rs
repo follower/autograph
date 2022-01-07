@@ -1,12 +1,9 @@
 use crate::{
-    atomic::AtomicF32,
+    //atomic::AtomicF32,
     autobind,
+    util::group_barrier,
 };
-use spirv_std::{
-    memory::{Scope, Semantics},
-    arch::control_barrier,
-    glam::UVec3,
-};
+use spirv_std::glam::UVec3;
 use num_traits::Zero;
 use crunchy::unroll;
 
@@ -47,12 +44,6 @@ pub struct GemmPushConsts<T> {
     csb: u32,
     rsc: u32,
     csc: u32,
-}
-
-fn group_barrier() {
-    unsafe {
-        control_barrier::<{Scope::Workgroup as u32}, {Scope::Workgroup as u32}, {Semantics::NONE.bits()}>();
-    }
 }
 
 macro_rules! impl_gemm {
@@ -229,6 +220,6 @@ impl_gemm! {
     gemm_bias_f32_unr8_mica2_micb2<f32, TC=f32, UNR=8, MICA=2, LA=1, MICB=2, LB=1, bias=true>,
     gemm_f32_unr8_mica4_micb4<f32, TC=f32, UNR=8, MICA=4, LA=2, MICB=4, LB=2>,
     gemm_bias_f32_unr8_mica4_micb4<f32, TC=f32, UNR=8, MICA=4, LA=2, MICB=4, LB=2, bias=true>,
-    gemm_f32_splitk256_unr16_mica1_micb1<@splitk=256, f32, TC=AtomicF32, UNR=16, MICA=1, LA=1, MICB=1, LB=1>,
-    gemm_bias_f32_splitk256_unr16_mica1_micb1<@splitk=256, f32, TC=AtomicF32, UNR=16, MICA=1, LA=1, MICB=1, LB=1, bias=true>,
+    //gemm_f32_splitk256_unr16_mica1_micb1<@splitk=256, f32, TC=AtomicF32, UNR=16, MICA=1, LA=1, MICB=1, LB=1>,
+    //gemm_bias_f32_splitk256_unr16_mica1_micb1<@splitk=256, f32, TC=AtomicF32, UNR=16, MICA=1, LA=1, MICB=1, LB=1, bias=true>,
 }

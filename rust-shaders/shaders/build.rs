@@ -16,7 +16,7 @@ fn gen_scale_impls() -> Result<()> {
     s.push_str("impl_scale!{\n");
     for x in ["u8", "u16", "bf16", "u32", "i32", "f32"] {
         let [x_buf, x_load] = buffer_load_types(x);
-        for y in ["bf16", "u32", "i32", "f32"] {
+        for y in ["u32", "i32", "f32"] {
             let [y_buf, y_load] = buffer_load_types(y);
             s.push_str(&format!("    scale_{x}_{y}<{x_buf}, {x_load}, {y_buf}, {y_load}>,\n"));
         }

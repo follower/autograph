@@ -1,7 +1,7 @@
 use spirv_std::glam::UVec3;
 use crate::{
     autobind,
-    half::bf16x2,
+    //half::bf16x2,
     util::{Load, Store},
 };
 
@@ -79,6 +79,7 @@ fn im2col_2d<T>(kernel_flip: bool, group_id: UVec3, local_id: UVec3, x: &[T], y:
     }}}}
 }
 
+/*
 #[autobind]
 #[spirv(compute(threads(256)))]
 pub fn im2col_2d_convolution_bf16(
@@ -93,6 +94,7 @@ pub fn im2col_2d_convolution_bf16(
 ) {
     im2col_2d(false, group_id, local_id, x, y, push_consts);
 }
+*/
 
 #[autobind]
 #[spirv(compute(threads(256)))]

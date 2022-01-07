@@ -8,14 +8,14 @@ type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
 static SCALAR_TYPES: &[(&'static str, &'static str)] = &[
     ("u8", "uint"),
     ("u16", "uint"),
-    ("bf16", "uint"),
+    //("bf16", "uint"),
     ("u32", "uint"),
     ("i32", "int"),
     ("f32", "float"),
 ];
 
 static NUM_TYPES: &[(&'static str, &'static str)] = &[
-    ("bf16", "uint"),
+    //("bf16", "uint"),
     ("u32", "uint"),
     ("i32", "int"),
     ("f32", "float"),
@@ -28,7 +28,7 @@ static UNSIGNED_TYPES: &[(&'static str, &'static str)] = &[
 ];
 
 static FLOAT_TYPES: &[(&'static str, &'static str)] = &[
-    ("bf16", "uint"),
+    //("bf16", "uint"),
     ("f32", "float"),
 ];
 
@@ -107,6 +107,7 @@ fn compile_glsl(
     validate_spirv(name, artifact.as_binary())?;
     fs::create_dir_all(&glsl_path)?;
     let fpath = glsl_path.join(&name).with_extension("spv");
+    println!("cargo:rerun-if-changed={}", fpath.to_string_lossy());
     fs::write(&fpath, artifact.as_binary_u8())?;
     Ok(())
 }
@@ -470,7 +471,7 @@ fn glsl_kmeans(compiler: &mut Compiler) -> Result<()> {
 
 fn main() -> Result<()> {
     let mut compiler = Compiler::new().unwrap();
-    glsl_accuracy(&mut compiler)?;
+    //glsl_accuracy(&mut compiler)?;
     glsl_bias_backward(&mut compiler)?;
     glsl_fill(&mut compiler)?;
     glsl_gemm(&mut compiler)?;
