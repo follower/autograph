@@ -21,8 +21,8 @@ impl<S: Data<Elem = u32>, D: Dimension> TensorBase<S, D> {
         let builder = rust_shaders::core()?
             .compute_pass(entry)?
             .slice(input.as_slice())?
-            .slice(target.as_slice())?
-            .push(n)?;
+            .slice(target.as_slice())?;
+        //.push(n)?;
         if n <= 256 {
             let builder = builder.slice_mut(output.as_raw_slice_mut())?;
             unsafe {

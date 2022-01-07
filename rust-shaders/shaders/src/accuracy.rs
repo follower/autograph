@@ -19,12 +19,16 @@ fn accuracy<T>(
     t: &[T],
     y: &mut [u32],
     y_group: &mut [u32; 256],
-    push_consts: &AccuracyPushConsts,
+    _push_consts: &AccuracyPushConsts,
 ) where T: Copy, [T]: Load<u32> {
     let group_id = group_id.x as usize;
     let local_id = local_id.x as usize;
     let global_id = group_id * 256 + local_id;
-    let n = push_consts.n as usize;
+    //let n = push_consts.n as usize;
+    let mut n = x.len();
+    if t.len() > n {
+        n = t.len();
+    }
     let (x, t) = if global_id < n {
         (x.load(global_id), t.load(global_id))
     } else {
