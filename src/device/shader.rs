@@ -112,45 +112,6 @@ impl Module {
     }
 
     #[cfg(test)]
-    fn cross_compile<T: spirv_cross::spirv::Target>(
-        &self,
-        options: <spirv_cross::spirv::Ast<T> as spirv_cross::spirv::Compile<T>>::CompilerOptions,
-    ) -> Result<Cow<str>>
-    where
-        spirv_cross::spirv::Ast<T>: spirv_cross::spirv::Parse<T> + spirv_cross::spirv::Compile<T>,
-    {
-        use anyhow::Context;
-        use spirv_cross::spirv::{Ast, Module};
-        let name: Cow<str> = self
-            .name()
-            .map_or_else(|| format!("{:?}", self).into(), Into::into);
-        let module = Module::from_words(bytemuck::cast_slice(&self.spirv));
-        let mut ast = Ast::<T>::parse(&module)
-            .with_context(|| format!("Parsing of {name} failed!", name = name))?;
-        ast.set_compiler_options(&options)?;
-        let output = ast
-            .compile()
-            .map(Into::into)
-            .with_context(|| format!("Compilation of {name} failed!", name = name))?;
-        Ok(output)
-    }
-
-    /*
-    #[cfg(test)]
-    pub(crate) fn to_metal(&self) -> Result<Cow<str>> {
-        let mut options = spirv_cross::msl::CompilerOptions::default();
-        options.version = spirv_cross::msl::Version::V1_2;
-        self.cross_compile::<spirv_cross::msl::Target>(options)
-    }*/
-
-    #[cfg(test)]
-    pub(crate) fn to_hlsl(&self) -> Result<Cow<str>> {
-        let mut options = spirv_cross::hlsl::CompilerOptions::default();
-        options.shader_model = spirv_cross::hlsl::ShaderModel::V5_1;
-        self.cross_compile::<spirv_cross::hlsl::Target>(options)
-    }
-
-    #[cfg(test)]
     pub(crate) fn to_metal(&self) -> Result<String> {
         use naga::back::msl::{Options, PipelineOptions, Writer};
         let module = spirv_to_naga(&self.spirv)?;
@@ -166,22 +127,39 @@ impl Module {
         Ok(metal)
     }
 
-    /* TODO: PushConstants not implemented in naga::back::hlsl?
     #[cfg(test)]
-    pub(crate) fn to_hlsl(&self) -> Result<String> {
-        use naga::{back::hlsl::{Writer, Options}};
-        let module = spirv_to_naga(&self.spirv)?;
-        let options = Options::default();
-        let info = validate_naga(&module)?;
-        let mut hlsl = String::new();
-        let mut writer = Writer::new(&mut hlsl, &options);
-        let translation_info = writer.write(&module, &info)?;
-        for (entry, name) in self.descriptor.entries.keys().zip(translation_info.entry_point_names) {
-            assert_eq!(entry.as_str(), name?.as_str());
+    pub(crate) fn to_hlsl(&self) -> Result<FxHashMap<String, String>> {
+        use anyhow::Context;
+        use spirv_cross::{
+            hlsl::{CompilerOptions, Target},
+            spirv::{Ast, ExecutionModel, Module},
+        };
+        let name: Cow<str> = self
+            .name()
+            .map_or_else(|| format!("{:?}", self).into(), Into::into);
+        let module = Module::from_words(bytemuck::cast_slice(&self.spirv));
+        let mut ast = Ast::<Target>::parse(&module)
+            .with_context(|| format!("Parsing of {name} failed!", name = name))?;
+        let mut options = CompilerOptions::default();
+        options.shader_model = spirv_cross::hlsl::ShaderModel::V5_1;
+        let mut hlsl =
+            FxHashMap::with_capacity_and_hasher(self.descriptor.entries.len(), Default::default());
+        for entry in self.descriptor.entries.keys() {
+            options
+                .entry_point
+                .replace((entry.clone(), ExecutionModel::GlCompute));
+            ast.set_compiler_options(&options)?;
+            let output = ast.compile().map(Into::into).with_context(|| {
+                format!(
+                    "Compilation of {name}: {entry} failed!",
+                    name = name,
+                    entry = entry
+                )
+            })?;
+            hlsl.insert(entry.clone(), output);
         }
         Ok(hlsl)
     }
-    */
 }
 
 impl Debug for Module {

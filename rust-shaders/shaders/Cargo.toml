@@ -11,7 +11,7 @@ crate-type = ["dylib"]
 [dependencies]
 spirv-std = { git = "https://github.com/EmbarkStudios/rust-gpu", features = ["glam"] }
 num-traits = { version = "0.2.14", default-features = false }
-crunchy = "0.2.2"
+crunchy = { version = "0.2.2", features = ["limit_256"] }
 autograph_derive = { path = "../../autograph_derive" }
 
 [build-dependencies]
